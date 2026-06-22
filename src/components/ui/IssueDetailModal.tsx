@@ -10,7 +10,7 @@ import {
 import { useBoardStore } from "@/store/board-store";
 import { IssueStatus, IssuePriority, ActivityLogEntry } from "@/types";
 import { PriorityIcon, PRIORITY_CONFIG } from "./PriorityIcon";
-import { STATUS_CONFIG } from "./StatusBadge";
+import { STATUS_CONFIG, StatusBadge } from "./StatusBadge";
 import { Avatar } from "./Avatar";
 
 const ACTIVITY_VERB: Record<ActivityLogEntry["action"], string> = {
@@ -60,32 +60,48 @@ export const IssueDetailModal: React.FC = () => {
 
     const [titleDraft, setTitleDraft] = useState("");
     const [descDraft, setDescDraft] = useState("");
+    const [statusDraft, setStatusDraft] = useState<IssueStatus>(IssueStatus.TODO);
+    const [priorityDraft, setPriorityDraft] = useState<IssuePriority>(IssuePriority.MEDIUM);
+    const [assigneeDraft, setAssigneeDraft] = useState<string>("");
     const [commentDraft, setCommentDraft] = useState("");
     const [tab, setTab] = useState<"comments" | "activity">("comments");
     const [confirmingDelete, setConfirmingDelete] = useState(false);
 
     const titleRef = useRef<HTMLTextAreaElement>(null);
 
+
+    // ── Dirty check — must come BEFORE useEffects that reference it ──
+    const isDirty = !!issue && (
+        titleDraft.trim() !== issue.title ||
+        descDraft.trim() !== (issue.description ?? "") ||
+        statusDraft !== issue.status ||
+        priorityDraft !== issue.priority ||
+        assigneeDraft !== (issue.assigneeId ?? "")
+    );
+
     // Sync local drafts whenever a new issue is opened
     useEffect(() => {
         if (issue) {
             setTitleDraft(issue.title);
             setDescDraft(issue.description ?? "");
+            setStatusDraft(issue.status);
+            setPriorityDraft(issue.priority);
+            setAssigneeDraft(issue.assigneeId ?? "");
             setConfirmingDelete(false);
             setTab("comments");
         }
     }, [issue?.id]);
 
-    // Close on Escape
+    // ── Escape to close ──────────────────────────────────────
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if (e.key === "Escape") selectIssue(null);
+            if (e.key === "Escape") handleClose
         };
         document.addEventListener("keydown", handler);
         return () => document.removeEventListener("keydown", handler);
-    }, [selectIssue]);
+    }, [selectIssue, isDirty]);
 
-    if (!issue) return null;
+    if (!issue) return null; // return  guard
 
     const assignee = issue.assigneeId ? usersMap[issue.assigneeId] : undefined;
     const reporter = usersMap[issue.reporterId];
@@ -93,20 +109,41 @@ export const IssueDetailModal: React.FC = () => {
     const comments = getCommentsForIssue(issue.id);
     const activity = getActivityForIssue(issue.id);
 
-    const commitTitle = () => {
-        const trimmed = titleDraft.trim();
-        if (trimmed && trimmed !== issue.title) {
-            updateIssue({ id: issue.id, title: trimmed });
-        } else {
-            setTitleDraft(issue.title);
-        }
+    // OLD EDITING LOGIC
+    // const commitTitle = () => {
+    //     const trimmed = titleDraft.trim();
+    //     if (trimmed && trimmed !== issue.title) {
+    //         updateIssue({ id: issue.id, title: trimmed });
+    //     } else {
+    //         setTitleDraft(issue.title);
+    //     }
+    // };
+
+    // const commitDescription = () => {
+    //     const trimmed = descDraft.trim();
+    //     if (trimmed !== (issue.description ?? "")) {
+    //         updateIssue({ id: issue.id, description: trimmed || null });
+    //     }
+    // };
+
+    const handleSave = () => {
+        const trimmedTitle = titleDraft.trim();
+        updateIssue({
+            id: issue.id,
+            title: trimmedTitle || issue.title,
+            description: descDraft.trim() || null,
+            status: statusDraft,
+            priority: priorityDraft,
+            assigneeId: assigneeDraft || null,
+        });
     };
 
-    const commitDescription = () => {
-        const trimmed = descDraft.trim();
-        if (trimmed !== (issue.description ?? "")) {
-            updateIssue({ id: issue.id, description: trimmed || null });
-        }
+    const handleCancel = () => {
+        setTitleDraft(issue.title);
+        setDescDraft(issue.description ?? "");
+        setStatusDraft(issue.status);
+        setPriorityDraft(issue.priority);
+        setAssigneeDraft(issue.assigneeId ?? "");
     };
 
     const handleAddComment = () => {
@@ -125,15 +162,24 @@ export const IssueDetailModal: React.FC = () => {
         selectIssue(null);
     };
 
+    const handleClose = () => {
+        if (isDirty) {
+            const confirmClose = window.confirm("You have unsaved changes. Discard them?");
+            if (!confirmClose) return;
+        }
+        selectIssue(null);
+    };
+
     const statuses = Object.values(IssueStatus);
     const priorities = Object.values(IssuePriority);
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            onClick={(e) => e.target === e.currentTarget && selectIssue(null)}
-        >
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div 
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+                /** close modal by click outside */
+                onClick={handleClose}
+            />
 
             <div
                 className="
@@ -166,7 +212,7 @@ export const IssueDetailModal: React.FC = () => {
                             {confirmingDelete ? "Confirm delete" : "Delete"}
                         </button>
                         <button
-                            onClick={() => selectIssue(null)}
+                            onClick={handleClose}
                             className="
                 p-1.5 rounded-md text-[var(--text-muted)]
                 hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]
@@ -186,7 +232,6 @@ export const IssueDetailModal: React.FC = () => {
                         ref={titleRef}
                         value={titleDraft}
                         onChange={(e) => setTitleDraft(e.target.value)}
-                        onBlur={commitTitle}
                         rows={1}
                         className="
               w-full bg-transparent text-lg font-semibold text-[var(--text-primary)]
@@ -199,7 +244,6 @@ export const IssueDetailModal: React.FC = () => {
                     <textarea
                         value={descDraft}
                         onChange={(e) => setDescDraft(e.target.value)}
-                        onBlur={commitDescription}
                         placeholder="Add a description..."
                         rows={3}
                         className="
@@ -210,15 +254,15 @@ export const IssueDetailModal: React.FC = () => {
             "
                     />
 
-                    {/* Metadata grid */}
+                    {/* Editable Metadata grid */}
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 py-3 border-y border-[var(--border)]">
                         {/* Status */}
                         <div className="flex items-center justify-between">
                             <span className="text-xs text-[var(--text-muted)]">Status</span>
                             <select
-                                value={issue.status}
+                                value={statusDraft}
                                 onChange={(e) =>
-                                    updateIssue({ id: issue.id, status: e.target.value as IssueStatus })
+                                    setStatusDraft(e.target.value as IssueStatus )
                                 }
                                 className="
                   text-xs bg-[var(--bg-hover)] text-[var(--text-secondary)]
@@ -236,9 +280,9 @@ export const IssueDetailModal: React.FC = () => {
                         <div className="flex items-center justify-between">
                             <span className="text-xs text-[var(--text-muted)]">Priority</span>
                             <select
-                                value={issue.priority}
+                                value={priorityDraft}
                                 onChange={(e) =>
-                                    updateIssue({ id: issue.id, priority: e.target.value as IssuePriority })
+                                    setPriorityDraft( e.target.value as IssuePriority )
                                 }
                                 className="
                   text-xs bg-[var(--bg-hover)] text-[var(--text-secondary)]
@@ -256,9 +300,9 @@ export const IssueDetailModal: React.FC = () => {
                         <div className="flex items-center justify-between">
                             <span className="text-xs text-[var(--text-muted)]">Assignee</span>
                             <select
-                                value={issue.assigneeId ?? ""}
+                                value={assigneeDraft}
                                 onChange={(e) =>
-                                    updateIssue({ id: issue.id, assigneeId: e.target.value || null })
+                                    setAssigneeDraft(e.target.value)
                                 }
                                 className="
                   text-xs bg-[var(--bg-hover)] text-[var(--text-secondary)]
@@ -408,6 +452,42 @@ export const IssueDetailModal: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Save bar — only visible when there are unsaved changes */}
+                {isDirty && (
+                    <div
+                        className="
+                            flex-shrink-0 flex items-center justify-between gap-3 px-5 py-2.5
+                            border-t border-[var(--border)] bg-[var(--accent-subtle)]
+                        "
+                    >
+                        <span className="text-xs text-[var(--text-secondary)]">
+                            You have unsaved changes
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleCancel}
+                                className="
+                                    px-3 py-1.5 rounded-md text-xs font-medium
+                                    text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+                                    hover:bg-[var(--bg-hover)] transition-colors
+                                "
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                className="
+                                    px-3 py-1.5 rounded-md text-xs font-semibold
+                                    bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]
+                                    transition-colors
+                                "
+                            >
+                                Save changes
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Comment input — fixed at bottom */}
                 <div className="flex-shrink-0 flex items-center gap-2 px-5 py-3 border-t border-[var(--border)]">
