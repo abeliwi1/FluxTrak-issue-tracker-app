@@ -36,7 +36,7 @@ pnpm dev
 
 Open `http://localhost:5173`.
 
-To reset to the original mock data:
+To reset to the original mock data/receive most recent updates to application:
 ```js
 // In browser console
 localStorage.removeItem("fluxtrak-storage");
