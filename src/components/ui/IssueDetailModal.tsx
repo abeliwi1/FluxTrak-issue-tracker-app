@@ -6,6 +6,8 @@ import {
     Clock,
     Tag,
     Send,
+    Plus,
+    CheckIcon
 } from "lucide-react";
 import { useBoardStore } from "@/store/board-store";
 import { IssueStatus, IssuePriority, ActivityLogEntry } from "@/types";
@@ -66,6 +68,7 @@ export const IssueDetailModal: React.FC = () => {
     const [commentDraft, setCommentDraft] = useState("");
     const [tab, setTab] = useState<"comments" | "activity">("comments");
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
     const titleRef = useRef<HTMLTextAreaElement>(null);
 
@@ -329,21 +332,106 @@ export const IssueDetailModal: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Labels */}
-                    {labels.length > 0 && (
+                    {/* Labels section */}
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-[var(--text-muted)]">Labels</span>
+                            {!labelPickerOpen && (
+                                <button
+                                    onClick={() => setLabelPickerOpen((o) => !o)}
+                                    className="
+                                        flex items-center gap-1 text-[12.75px] text-[var(--text-primary)]
+                                        hover:text-[var(--text-secondary)] transition-colors
+                                    "
+                                >
+                                    <Plus className="w-3 h-3" />
+                                    Add label
+                                </button>
+                            )}
+                            {labelPickerOpen && (
+                                <button
+                                    onClick={() => setLabelPickerOpen((o) => !o)}
+                                    className="
+                                        flex items-center gap-1 text-[12.75px] text-blue-500
+                                        hover:text-[var(--text-secondary)] transition-colors
+                                    "
+                                >
+                                    <CheckIcon className="w-5 h-5" />
+                                    Set New Labels
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Active labels */}
                         <div className="flex flex-wrap gap-1.5">
                             {labels.map((label) => (
-                                <span
+                                <button
                                     key={label.id}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium"
-                                    style={{ backgroundColor: `${label.color}1a`, color: label.color }}
+                                    onClick={() => {
+                                        const newLabelIds = issue.labelIds.filter((id) => id !== label.id);
+                                        updateIssue({ id: issue.id, labelIds: newLabelIds });
+                                    }}
+                                    title={`Remove ${label.name}`}
+                                    className="
+                                        group inline-flex items-center gap-1 px-2 py-0.5 rounded
+                                        text-[11px] font-medium transition-all
+                                        hover:ring-1 hover:ring-current
+                                    "
+                                    style={{
+                                        backgroundColor: `${label.color}1a`,
+                                        color: label.color,
+                                    }}
                                 >
                                     <Tag className="w-2.5 h-2.5" />
                                     {label.name}
-                                </span>
+                                    <X className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
                             ))}
+
+                            {labels.length === 0 && (
+                                <span className="text-xs text-[var(--text-muted)]">No labels</span>
+                            )}
                         </div>
-                    )}
+
+                        {/* Label picker dropdown */}
+                        {labelPickerOpen && (
+                            <div
+                                className="
+                                    mt-1 p-1.5 rounded-lg border border-[var(--border)]
+                                    bg-[var(--bg-surface)] shadow-lg shadow-black/20
+                                    flex flex-wrap gap-1.5
+                                "
+                            >
+                                {Object.values(labelsMap).map((label) => {
+                                    const isActive = issue.labelIds.includes(label.id);
+                                    return (
+                                        <button
+                                            key={label.id}
+                                            onClick={() => {
+                                                const newLabelIds = isActive
+                                                    ? issue.labelIds.filter((id) => id !== label.id)
+                                                    : [...issue.labelIds, label.id];
+                                                updateIssue({ id: issue.id, labelIds: newLabelIds });
+                                            }}
+                                            className="
+                                                inline-flex items-center gap-1 px-2 py-0.5 rounded
+                                                text-[11px] font-medium transition-all
+                                            "
+                                            style={{
+                                                backgroundColor: isActive ? `${label.color}40` : `${label.color}1a`,
+                                                color: label.color,
+                                                boxShadow: isActive ? `0 0 0 1px ${label.color}` : undefined,
+                                            }}
+                                        >
+                                            {isActive && <X className="w-2.5 h-2.5" />}
+                                            {!isActive && <Plus className="w-2.5 h-2.5" />}
+                                            {label.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Tabs: Comments / Activity */}
                     <div>

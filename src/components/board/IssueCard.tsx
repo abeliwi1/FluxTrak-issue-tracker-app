@@ -20,6 +20,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, isOverlay = false }
     const labelsMap = useBoardStore((s) => s.labels);
     const labels = issue.labelIds.map((id) => labelsMap[id]).filter(Boolean);
     const selectIssue = useBoardStore((s) => s.selectIssue);
+    const toggleLabelFilter = useBoardStore((s) => s.toggleLabelFilter);
+    const activeFilters = useBoardStore((s) => s.filters.labelIds);
 
     const {
         attributes,
@@ -74,20 +76,31 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, isOverlay = false }
             {labels.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-2.5">
                     {labels.slice(0, 3).map((label) => (
-                        <span
+                        <button
                             key={label.id}
+                            onClick={(e) => {
+                                e.stopPropagation(); // prevent card click opening detail modal
+                                toggleLabelFilter(label.id);
+                            }}
+                            title={`Filter by ${label.name}`}
                             className="
-                inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                text-[10px] font-medium
-              "
+                                inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+                                text-[10px] font-medium transition-all
+                                hover:ring-1 hover:ring-current cursor-pointer
+                            "
                             style={{
-                                backgroundColor: `${label.color}1a`,
+                                backgroundColor: activeFilters.includes(label.id)
+                                    ? `${label.color}40`
+                                    : `${label.color}1a`,
                                 color: label.color,
+                                boxShadow: activeFilters.includes(label.id)
+                                    ? `0 0 0 1px ${label.color}`
+                                    : undefined,
                             }}
                         >
                             <Tag className="w-2.5 h-2.5" />
                             {label.name}
-                        </span>
+                        </button>
                     ))}
                 </div>
             )}
